@@ -15,7 +15,7 @@ from yt_commands import (
 
 from yt_type_helpers import make_schema, normalize_schema, make_column, list_type, tuple_type, optional_type
 
-from yt_helpers import skip_if_component_old, skip_if_old, skip_if_delivery_fenced_pipe_writer_not_supported
+from yt_helpers import skip_if_component_old, skip_if_old, skip_if_delivery_fenced_pipe_writer_not_supported, JobCountProfiler
 
 import yt.yson as yson
 from yt.test_helpers import assert_items_equal
@@ -1933,18 +1933,28 @@ print(json.dumps(input))
 
     @authors("fauct")
     def test_distributed_interrupting(self):
+        restarted_job_profiler = JobCountProfiler(
+            "aborted",
+            tags={"tree": "default", "job_type": "map", "abort_reason": "cookie_group_disbanded"},
+        )
         create("table", "//tmp/t1")
         create("table", "//tmp/t2")
         write_table("//tmp/t1", {"a": "b"})
+
+        exit_code = 17
         op=map(
             track=False,
             in_="//tmp/t1",
             out="//tmp/t2",
-            command=with_breakpoint("""read row; echo $row; BREAKPOINT; cat"""),
-            spec={"mapper": {"cookie_group_size": 2}},
+            command=with_breakpoint(f"""(trap "exit {exit_code}" SIGINT; BREAKPOINT)"""),
+            spec={"mapper": {
+                "cookie_group_size": 2, 
+                "interruption_signal": "SIGINT",
+                "restart_exit_code": exit_code,
+            }},
         )
-        for job in wait_breakpoint(job_count=2):
-            interrupt_job(job)
+        interrupt_job(wait_breakpoint(job_count=2)[0])
+        wait(lambda: restarted_job_profiler.get_job_count_delta() != 0)
         release_breakpoint()
         op.track()
 

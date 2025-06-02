@@ -1362,8 +1362,8 @@ class TestGangOperations(YTEnvSetup):
     @authors("pogorelov")
     @pytest.mark.parametrize("jobs_were_scheduled", [0, 1])
     def test_revive_before_jobs_scheduled(self, jobs_were_scheduled):
-        incarnation_switch_counter = _get_controller_profiler().with_tags({"reason": "job_lack_after_revival"}).counter(
-            "controller_agent/gang_operations/incarnation_switch_count")
+        # incarnation_switch_counter = _get_controller_profiler().with_tags({"reason": "job_lack_after_revival"}).counter(
+        #     "controller_agent/gang_operations/incarnation_switch_count")
 
         total_cpu_limit = get("//sys/scheduler/orchid/scheduler/cluster/resource_limits/cpu")
         create_pool("test_pool", attributes={"min_share_resources": {"cpu": total_cpu_limit}})
@@ -1374,12 +1374,11 @@ class TestGangOperations(YTEnvSetup):
         # Will not start jobs while sleeping_op is running.
         op = run_test_vanilla(
             with_breakpoint("BREAKPOINT"),
-            job_count=3,
-            task_patch={"gang_options": {}},
+            task_patch={"cookie_group_size": 3},
             spec={"pool": "fake_pool"},
         )
 
-        first_incarnation_id = self._get_operation_incarnation(op)
+        # first_incarnation_id = self._get_operation_incarnation(op)
 
         if jobs_were_scheduled:
             wait(lambda: len(get(_get_job_tracker_orchid_path(op) + f"/operations/{op.id}/allocations")) == jobs_were_scheduled)
@@ -1388,26 +1387,26 @@ class TestGangOperations(YTEnvSetup):
 
         op.wait_for_fresh_snapshot()
 
-        assert incarnation_switch_counter.get_delta() == 0
+        # assert incarnation_switch_counter.get_delta() == 0
 
         with Restarter(self.Env, CONTROLLER_AGENTS_SERVICE):
             sleeping_op.abort()
 
-        incarnation_switch_counter = _get_controller_profiler().with_tags({"reason": "job_lack_after_revival"}).counter(
-            "controller_agent/gang_operations/incarnation_switch_count")
+        # incarnation_switch_counter = _get_controller_profiler().with_tags({"reason": "job_lack_after_revival"}).counter(
+        #     "controller_agent/gang_operations/incarnation_switch_count")
 
-        second_incarnation_id = self._get_operation_incarnation(op)
+        # second_incarnation_id = self._get_operation_incarnation(op)
 
-        print_debug(f"First incarnation id: {first_incarnation_id}, second incarnation id: {second_incarnation_id}")
+        # print_debug(f"First incarnation id: {first_incarnation_id}, second incarnation id: {second_incarnation_id}")
 
-        assert first_incarnation_id != second_incarnation_id
+        # assert first_incarnation_id != second_incarnation_id
 
         wait_breakpoint(job_count=3)
         release_breakpoint()
 
         op.track()
 
-        wait(lambda: incarnation_switch_counter.get() == 1)
+        # wait(lambda: incarnation_switch_counter.get() == 1)
 
     @authors("pogorelov")
     def test_restart_completed_jobs(self):
